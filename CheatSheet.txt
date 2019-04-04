@@ -1,0 +1,361 @@
+https://css-tricks.com/using-react-and-xstate-to-build-a-sign-in-form/
+
+01.create-react-app, npm i styled-components, xstate and validator
+
+02.create project file structure:
+public/
+  |--src/
+    |--Loader/
+    |--SignIn/
+      |--contactAuthService.js
+      |--index.jsx
+      |--isPasswordShort.js
+      |--machineConfig.js
+      |--styles.js
+    |--globalStyles.js
+    |--index.jsx
+package.json
+
+03.create the machine config and states in machineConfig.js:
+const machineConfig = {
+  id: 'signIn',
+  initial: 'dataEntry',
+  states: {
+    dataEntry: {},
+    awaitingResponse: {},
+    emailErr: {},
+    passwordErr: {},
+    serviceErr: {},
+    signedIn: {},
+  }
+}
+
+export default machineConfig
+
+04.create transitions:
+states: {
+  dataEntry: {
+    on: {
+      ENTER_EMAIL: {},
+      ENTER_PASSWORD: {},
+      EMAIL_BLUR: {},
+      PASSWORD_BLUR: {},
+      SUBMIT: {
+        target: "awaitingResponse" //target used to add conditionals later
+      }
+    }
+  },
+  awaitingResponse: {},
+  emailErr: {
+    on: {
+      ENTER_EMAIL: "dataEntry"
+    }
+  },
+  passwordErr: {
+    on: {
+      ENTER_PASSWORD: "dataEntry"
+    }
+  },
+  serviceErr: {
+    on: {
+      SUBMIT: {
+        target: "awaitingResponse"
+      }
+    }
+  },
+  signedIn: {}
+}
+
+05.store user (external) data in context:
+const machineConfig = {
+  id: 'signIn',
+  context: {
+    email: '',
+    password: '',
+  },
+  ...
+
+06.be more specific about errors with nested state machines:
+const machineConfig = {
+  ...
+  states: {
+    ...
+    emailErr: {
+      on: {
+        ENTER_EMAIL: {
+          target: 'dataEntry',
+        },
+      },
+      initial: 'badFormat',
+      states: {
+        badFormat: {},
+        noAccount: {},
+      },
+    },
+    passwordErr: {
+      on: {
+        ENTER_PASSWORD: {
+          target: 'dataEntry',
+        },
+      },
+      initial: 'tooShort',
+      states: {
+        tooShort: {},
+        incorrect: {},
+      },
+    },
+    ...
+
+07.add guards (conditionals) to allow transitions only when certain conditions are met:
+const machineConfig = {
+  ...
+  states: {
+    ...
+    dataEntry: {
+      ...
+      on: {
+        EMAIL_BLUR: {
+          cond: 'isBadEmailFormat',
+          target: 'emailErr.badFormat'
+        },
+        PASSWORD_BLUR: {
+          cond: 'isPasswordShort',
+          target: 'passwordErr.tooShort'
+        },
+        SUBMIT: [
+          //array of possible SUBMIT guards
+          {
+            cond: "isBadEmailFormat",
+            target: "emailErr.badFormat"
+          },
+          {
+            cond: "isPasswordShort",
+            target: "passwordErr.tooShort"
+          },
+          {
+            target: "awaitingResponse" //if no guards kicked in
+          }
+        ]
+      ...
+
+08.make authentication service request with invoke (promise) to verify credentials and transition to signedIn or error state:
+const machineConfig = {
+  ...
+  states: {
+    ...
+    // We’re in a state of waiting for a response
+    awaitingResponse: {
+      // Make a call to the authentication service      
+      invoke: {
+        src: 'requestSignIn',
+        // If successful, move to the signedIn state
+        onDone: {
+          target: 'signedIn'
+        },
+        // If email input is unsuccessful, move to the emailErr.noAccount sub-state
+        onError: [
+          {
+            cond: 'isNoAccount',
+            target: 'emailErr.noAccount'
+          },
+          {
+            // If password input is unsuccessful, move to the passwordErr.incorrect sub-state
+            cond: 'isIncorrectPassword',
+            target: 'passwordErr.incorrect'
+          },
+          {
+            // If the service itself cannot be reached, move to the serviceErr state
+            cond: 'isServiceErr',
+            target: 'serviceErr'
+          }
+        ]
+      },
+    },
+    ...
+
+09.save user entered data with actions on transitions:
+const machineConfig = {
+  ...
+  states: {
+    ...
+    // On submit, target the two fields
+    dataEntry: {
+      on: {
+        ENTER_EMAIL: {
+          actions: 'cacheEmail'
+        },
+        ENTER_PASSWORD: {
+          actions: 'cachePassword'
+        },
+      },
+      ...
+    },
+    // If there’s an email error on that field, trigger email cache action
+    emailErr: {
+      on: {
+        ENTER_EMAIL: {
+          actions: 'cacheEmail',
+          ...
+        }
+      }
+    },
+    // If there’s a password error on that field, trigger password cache action
+    passwordErr: {
+      on: {
+        ENTER_PASSWORD: {
+          actions: 'cachePassword',
+          ...        
+        }
+      }
+    },
+    ...
+
+10.set the final state and trigger actions with onDone:
+const machineConfig = {
+  ...
+  states: {
+    ...
+    signedIn: {
+      type: 'final'
+    },
+    onDone: {
+      actions: 'onAuthentication'
+    },
+    ...
+
+11.connect statechart to UI and BE by mapping config declared strings to functions.
+define a React class component with three refs:
+// SignIn/index.jsx
+
+import React, { Component, createRef } from 'react'
+
+class SignIn extends Component {
+  emailInputRef = createRef()
+  passwordInputRef = createRef()
+  submitBtnRef = createRef()
+  
+  render() {
+    return null
+  }
+}
+
+export default SignIn
+
+12.in SignIn/index.js, map out the declared actions in the machineConfig's actions property
+focusEmailInput
+focusPasswordInput
+focusSubmitBtn
+cacheEmail
+cachePassword
+onAuthentication:
+
+// SignIn/index.jsx
+
+import { actions } from 'xstate'
+const { assign } = actions  
+
+const delay = func => setTimeout(() => func())
+
+class SignIn extends Component {
+  ...
+  machineOptions = {
+    actions: {
+      focusEmailInput: () => {
+        delay(this.emailInputRef.current.focus())
+      },
+      focusPasswordInput: () => {
+        delay(this.passwordInputRef.current.focus())
+      },
+      focusSubmitBtn: () => {
+        delay(this.submitBtnRef.current.focus())
+      },
+      cacheEmail: assign((ctx, evt) => ({
+        email: evt.value
+      })),
+      cachePassword: assign((ctx, evt) => ({
+        password: evt.value
+      })),
+      // We’ll log a note in the console to confirm authentication
+      onAuthentication: () => {
+        console.log('user authenticated')
+      }
+    },
+  }
+}
+
+13.put up guards declared in machineConfig
+isBadEmailFormat
+isPasswordShort
+isNoAccount
+isIncorrectPassword
+isServiceErr
+
+Guards are mapped in the machine configuration’s guards property. The isBadEmailFormat and isPasswordShort guards make use of the context to read the email and password entered by the user then pass them on to the appropriate functions. isNowAccount, isIncorrectPassword and isServiceErr make use of the event object to read what kind of error was returned from the call to the authentication service.
+
+// isPasswordShort.js
+
+const isPasswordShort = password => password.length < 6
+
+export default isPasswordShort
+
+// SignIn/index.jsx
+
+import { isEmail } from 'validator'
+import isPasswordShort from './isPasswordShort'
+
+class SignIn extends Component {
+  ...
+  machineOptions = {
+    ...
+    guards: {
+      isBadEmailFormat: ctx => !isEmail(ctx.email),
+      isPasswordShort: ctx => isPasswordShort(ctx.password),
+      isNoAccount: (ctx, evt) => evt.data.code === 1,
+      isIncorrectPassword: (ctx, evt) => evt.data.code === 2,
+      isServiceErr: (ctx, evt) => evt.data.code === 3
+    },  
+  },
+  ...
+}
+
+14.hook up the services
+We declared the following service in our machine configuration (within our invoke definition): requestSignIn.
+
+Services are mapped in the machine configuration’s services property. In this case, the function is a promise and is passed to the email password from the context.
+
+// contactAuthService.js
+// error code 1 - no account
+// error code 2 - wrong password
+// error code 3 - no response
+
+const isSuccess = () => Math.random() >= 0.8
+const generateErrCode = () => Math.floor(Math.random() * 3) + 1
+
+const contactAuthService = (email, password) =>
+  new Promise((resolve, reject) => {
+    console.log(`email: ${email}`)
+    console.log(`password: ${password}`)
+    setTimeout(() => {
+      if (isSuccess()) resolve()
+      reject({ code: generateErrCode() })
+    }, 1500)
+})
+
+export default contactAuthService
+// SignIn/index.jsx
+...
+import contactAuthService from './contactAuthService.js'
+
+class SignIn extends Component {
+  ...
+  machineOptions = {
+    ...
+    services: {
+      requestSignIn: ctx => contactAuthService(ctx.email, ctx.password)
+    }
+  },
+  ...
+}
+
+15.connect React and XState
+using XState in a real world scenario requires an interpreter. react-xstate-js is an interpreter that connects React with XState using the render props approach. It takes two props — config and options — and returns an XState service and state object.
