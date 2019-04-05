@@ -1,5 +1,6 @@
 import React from "react";
 import Checkbox from "./Checkbox";
+import { Label } from "../SignIn/styles";
 
 class StyledCheckbox extends React.Component {
   state = { checked: false };
@@ -11,13 +12,13 @@ class StyledCheckbox extends React.Component {
   render() {
     return (
       <div style={{ fontFamily: "system-ui" }}>
-        <label>
+        <Label>
           <Checkbox
             checked={this.state.checked}
             onChange={this.handleCheckboxChange}
           />
-          <span style={{ marginLeft: 8 }}>Keep me logged in</span>
-        </label>
+          <span style={{ marginLeft: 10 }}>Keep me logged in</span>
+        </Label>
       </div>
     );
   }

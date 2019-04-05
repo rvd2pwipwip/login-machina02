@@ -29,6 +29,7 @@ class SignIn extends Component {
   emailInputRef = createRef();
   passwordInputRef = createRef();
   submitBtnRef = createRef();
+  checkboxRef = createRef();
 
   machineOptions = {
     actions: {
@@ -166,7 +167,7 @@ class SignIn extends Component {
                   "incorrect password"}
               </ErrMsg>
 
-              <StyledCheckbox fade={fadeHeading} />
+              <StyledCheckbox ref={this.checkboxRef} fade={fadeHeading} />
 
               <Button
                 type="submit"
